@@ -3,7 +3,7 @@ requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "dataprep-kit"
+name = "prepx"
 version = "0.1.0"
 description = "One-line DataFrame cleaning and EDA for pandas."
 readme = "README.md"
