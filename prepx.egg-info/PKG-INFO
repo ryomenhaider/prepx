@@ -1,6 +1,6 @@
 Metadata-Version: 2.4
 Name: prepx
-Version: 1.0.0
+Version: 2.0.0
 Summary: One-line DataFrame cleaning and EDA for pandas with advanced outlier detection, imputation, and drift analysis.
 Author: prepx Contributors
 License: MIT

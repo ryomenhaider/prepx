@@ -18,7 +18,7 @@ from prepx.eda.stats import (
     compute_overview,
 )
 
-__version__ = "1.0.0"
+__version__ = "2.0.0"
 
 
 def clean(df, **kwargs):
