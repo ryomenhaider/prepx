@@ -1,6 +1,6 @@
-# prepx
+# prepx v2
 
-One-line cleaning **and** exploratory data analysis for pandas DataFrames.
+One-line DataFrame cleaning and EDA with advanced imputation, outlier detection, and drift analysis.
 
 ```python
 from prepx import clean, eda
@@ -13,27 +13,64 @@ eda_report = eda(cleaned_df, target="price")
 
 ## Features
 
-- **Automated Data Cleaning**: Handle duplicates, missing values, outliers, and more with a single function call
-- **Smart Type Inference**: Automatically convert columns to numeric or datetime when possible
-- **Column Standardization**: Auto-rename columns to snake_case
-- **Outlier Detection**: Identify and cap outliers using IQR or Z-score methods
-- **Full EDA Reports**: Generate comprehensive exploratory analysis with statistics, correlations, and warnings
-- **Target Analysis**: When a target column is specified, includes class balance and feature correlations
-- **Programmatic Access**: All report data is returned as dicts for further processing
+### Cleaning (v2 new)
+- **Type Coercion** — Auto-convert strings to numeric/datetime BEFORE missing handling
+- **Advanced Missing Handling** — ffill, bfill, median/mode, KNN, MICE (iterative imputer)
+- **Missing Indicators** — Add binary columns flagging where values were missing
+- **Multiple Outlier Methods** — IQR, Z-score, Modified Z-score (MAD), Isolation Forest
+- **Outlier Actions** — Cap (winsorize), remove rows, or flag with indicators
+- **Fuzzy Deduplication** — rapidfuzz for near-duplicate detection
+- **Categorical Normalization** — Standardize "USA" = "U.S.A" = "United States"
+- **Leakage Detection** — Flag ID columns, timestamps that cause look-ahead bias
+
+### EDA (v2 new)
+- **Distribution Fitting** — Auto-fit 10 distributions, rank by AIC/BIC
+- **Multimodality Detection** — Detect hidden subgroups in data
+- **Multiple Correlation Methods** — pearson, spearman, kendall
+- **VIF (Variance Inflation Factor)** — Detect multicollinearity
+- **Drift Detection** — Train/test distribution comparison with PSI, KS test
+- **Target Analysis** — Class balance, feature correlations with target
+
+### Architecture
+- **Modular** — Import only what you need
+- **Optional Dependencies** — Core stays lightweight (~20MB)
+- **Backwards Compatible** — v1 API still works
 
 ---
 
 ## Installation
 
+### Minimal (v1 equivalent)
 ```bash
 pip install prepx
 ```
 
-Or install from source:
+### With visualizations
+```bash
+pip install prepx[viz]
+```
 
+### Full features
+```bash
+pip install prepx[full]
+```
+
+Or from source:
 ```bash
 pip install .
 ```
+
+---
+
+## Dependencies
+
+| Group | Packages | Install size |
+|-------|----------|-------------|
+| Core | pandas, numpy | ~20MB |
+| advanced | sklearn, scipy | +150MB |
+| viz | matplotlib, seaborn | +50MB |
+| plotting | plotly, kaleido | +30MB |
+| full | all above | ~250MB |
 
 ---
 
@@ -41,74 +78,163 @@ pip install .
 
 Cleans the DataFrame and returns the cleaned version plus a full action report.
 
+### Basic Usage
+
+```python
+cleaned, report = clean(df)
+```
+
+### Advanced Options
+
 | Parameter | Default | What it does |
 |---|---|---|
 | `drop_duplicates` | `True` | Remove exact duplicate rows |
-| `handle_missing` | `"auto"` | `"auto"`/`"fill"` → median/mode fill; `"drop"` → drop NaN rows; `"none"` → skip |
+| `dedupe_method` | `"exact"` | `"exact"` or `"fuzzy"` |
+| `dedupe_threshold` | `0.85` | Similarity threshold for fuzzy |
+| `missing_method` | `"auto"` | `"auto"`, `"drop"`, `"ffill"`, `"bfill"`, `"median"`, `"mode"`, `"knn"`, `"mice"` |
+| `missing_indicators` | `False` | Add columns flagging where data was missing |
 | `missing_threshold` | `0.6` | Drop columns with > this fraction missing |
-| `fix_dtypes` | `True` | Coerce object columns to numeric or datetime when ≥80% parse |
-| `strip_whitespace` | `True` | Strip leading/trailing whitespace from strings |
+| `fix_dtypes` | `True` | Coerce strings to numeric/datetime when ≥80% parse |
+| `strip_whitespace` | `True` | Strip leading/trailing whitespace |
 | `standardize_columns` | `True` | Rename columns to snake_case |
-| `remove_outliers` | `False` | Cap outliers via IQR fences or Z-score |
-| `outlier_method` | `"iqr"` | `"iqr"` or `"zscore"` |
-| `outlier_threshold` | `3.0` | Z-score cut-off (only used for `"zscore"`) |
-| `drop_constant_cols` | `True` | Drop columns with only one unique value |
-| `verbose` | `True` | Print a human-readable report |
+| `naming_style` | `"snake"` | `"snake"`, `"camel"`, `"pascal"`, `"kebab"` |
+| `remove_outliers` | `False` | Handle outliers |
+| `outlier_method` | `"iqr"` | `"iqr"`, `"zscore"`, `"modified_zscore"`, `"isolation_forest"` |
+| `outlier_action` | `"capped"` | `"capped"`, `"removed"`, `"flagged"` |
+| `drop_constant_cols` | `True` | Drop columns with only one value |
+| `verbose` | `True` | Print report |
 
-### Example output
+### Advanced Examples
 
-```
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  prepx  ·  Cleaning Report
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  Initial shape                   1000 rows × 12 cols
-  Final shape                      961 rows ×  9 cols
-  Rows removed                      39
-  Columns removed                    3
-──────────────────────────────────────────────────────────────
+```python
+# KNN imputation
+cleaned, report = clean(df, missing_method="knn")
 
-  ✦ Column names → snake_case  (4 renamed)
-  ✦ Whitespace stripped  (5 string columns)
-  ✦ Type coercion  (2 columns updated)
-      Numeric  : age, income
-  ✦ Duplicate rows removed  : 12
-  ✦ Constant columns dropped : id_copy
-  ✦ High-missing columns dropped  (>60% NaN)
-      notes
-  ✦ Missing values filled  (3 columns)
-      age       4 NaN → median (32.0)
-      city      2 NaN → mode ('London')
+# Missing indicators (flag where values were missing)
+cleaned, report = clean(df, missing_indicators=True)
+
+# MICE (Multiple Imputation by Chained Equations)
+cleaned, report = clean(df, missing_method="mice")
+
+# Fuzzy deduplication
+cleaned, report = clean(df, dedupe_method="fuzzy", dedupe_threshold=0.85)
+
+# Isolation Forest outliers with flags
+cleaned, report = clean(df, remove_outliers=True, outlier_method="isolation_forest", outlier_action="flagged")
+
+# Winsorize (cap extremes)
+cleaned, report = clean(df, remove_outliers=True, outlier_action="capped")
 ```
 
 ---
 
 ## `eda(df, **kwargs)` → `dict`
 
-Full exploratory analysis. Returns a rich dict and prints a report.
+Full exploratory analysis.
+
+### Basic Usage
+
+```python
+report = eda(df)
+```
+
+### Advanced Options
 
 | Parameter | Default | What it does |
 |---|---|---|
-| `target` | `None` | Target column — adds class balance + per-feature correlations |
-| `top_n_categories` | `10` | How many top categories to show per object column |
-| `correlation_method` | `"pearson"` | `"pearson"`, `"spearman"`, or `"kendall"` |
-| `verbose` | `True` | Print a human-readable report |
+| `target` | `None` | Target column — adds class balance + correlations |
+| `test_data` | `None` | Test DataFrame for drift detection |
+| `correlations` | `["pearson"]` | Methods: `"pearson"`, `"spearman"`, `"kendall"` |
+| `check_drift` | `False` | Check train/test drift |
+| `detect_multimodality` | `False` | Detect bimodal distributions |
+| `fit_distributions` | `False` | Fit 10 distributions (requires scipy) |
+| `top_n_categories` | `10` | Top categories per column |
+| `correlation_threshold` | `0.7` | Threshold for high correlation |
+| `verbose` | `True` | Print report |
+
+### Advanced Examples
+
+```python
+# With target analysis
+report = eda(df, target="churn")
+
+# Multiple correlation methods
+report = eda(df, correlations=["pearson", "spearman"])
+
+# Drift detection
+train = pd.read_csv("train.csv")
+test = pd.read_csv("test.csv")
+report = eda(train, test_data=test, check_drift=True)
+
+# Distribution fitting (requires scipy)
+report = eda(df, fit_distributions=True)
+print(report["distributions"]["income"]["fits"][0]["distribution"])
+
+# Multimodality detection
+report = eda(df, detect_multimodality=True)
+print(report["multimodality"]["multimodal_columns"])
+```
 
 ### Report dict keys
 
 | Key | Contents |
 |---|---|
 | `overview` | Shape, duplicates, memory |
-| `dtypes` | Column lists by type + per-column dtype |
-| `missing` | Total missing, per-column counts and percentages |
+| `dtypes` | Column lists by type |
 | `numeric_stats` | Mean, std, min/max, percentiles, skewness, kurtosis, outliers |
-| `categorical_stats` | Unique count, top-N values, mode, entropy |
-| `correlations` | Full matrix + high-correlation pairs (|r| ≥ 0.7) |
-| `target_analysis` | Class balance + feature correlations (if `target` set) |
-| `warnings` | Auto-generated issues (duplicates, skew, multicollinearity, etc.) |
+| `categorical_stats` | Unique count, top values, mode, entropy |
+| `correlations` | Matrix + high-correlation pairs |
+| `target_analysis` | Class balance + feature correlations (if target set) |
+| `drift_analysis` | PSI/KS scores (if test_data provided) |
+| `distributions` | Best-fit distributions (if fit_distributions=True) |
+| `warnings` | Auto-generated issues |
 
 ---
 
-## Quick start
+## Modular API
+
+Import individual functions for more control:
+
+```python
+from prepx import (
+    coerce_types,
+    handle_missing,
+    handle_outliers,
+    detect_leakage_columns,
+    compute_numeric_stats,
+    compute_correlations,
+    compute_vif,
+    compute_drift,
+)
+
+# Step-by-step cleaning
+df = coerce_types(df)
+df, report = handle_missing(df, method="knn")
+df, report = handle_outliers(df, method="isolation_forest")
+
+# Modular EDA
+stats = compute_numeric_stats(df)
+corrs = compute_correlations(df, methods=["pearson", "spearman"])
+vif = compute_vif(df)
+drift = compute_drift(train_df, test_df)
+```
+
+---
+
+## Version History
+
+- **1.0.0** (2025) — Major rewrite with modular architecture
+- **0.1.0** — Original release
+
+### Version Contract
+
+- Follows semver: breaking changes only on major bumps
+- Deprecated functions kept for one minor version before removal
+- Install size kept under 50MB for core
+
+---
+
+## Quick Start
 
 ```python
 import pandas as pd
@@ -116,13 +242,14 @@ from prepx import clean, eda
 
 df = pd.read_csv("data.csv")
 
-# 1 — clean
-cleaned, clean_report = clean(df, remove_outliers=True)
+# Clean with advanced options
+cleaned, clean_report = clean(df, missing_method="knn", remove_outliers=True)
 
-# 2 — explore
-eda_report = eda(cleaned, target="churn")
+# Full EDA
+eda_report = eda(cleaned, target="churn", correlations=["pearson", "spearman"])
 
-# 3 — use the report programmatically
+# Use reports programmatically
 print(eda_report["warnings"])
-print(eda_report["numeric_stats"]["age"])
+if eda_report.get("drift_analysis"):
+    print("Drift detected:", eda_report["drift_analysis"]["drifted"])
 ```
